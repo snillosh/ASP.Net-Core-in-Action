@@ -8,6 +8,8 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler();
 }
 
-app.MapGet("/", void () => throw new Exception());
+app.UseStatusCodePages();
+
+app.MapGet("/", () => Results.NotFound());
 
 app.Run();
