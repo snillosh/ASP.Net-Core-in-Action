@@ -1,39 +1,36 @@
+using System.Collections.Concurrent;
+
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 WebApplication app = builder.Build();
 
-app.MapGet("/fruit", () => Fruit.All);
+var _fruit = new ConcurrentDictionary<string, Fruit>();
 
-var getFruit = (string id) => Fruit.All[id];
-app.MapGet("/fruit/{id}", getFruit);
+app.MapGet("/fruit", () => _fruit);
 
-app.MapPost("/fruit/{id}", Handlers.AddFruit);
+app.MapGet("/fruit/{id}", (string id) =>
+    _fruit.TryGetValue(id, out var fruit)
+        ? TypedResults.Ok(fruit)
+        : Results.NotFound());
 
-Handlers handlers = new();
-app.MapPut("/fruit/{id}", handlers.ReplaceFruit);
 
-app.MapDelete("/fruit/{id}", DeleteFruit);
+app.MapPost("/fruit/{id}", (string id, Fruit fruit) =>
+    _fruit.TryAdd(id, fruit)
+        ? TypedResults.Created($"/fruit/{id}", fruit)
+        : Results.BadRequest(new
+            { id = "A fruit with this id already exists" }));
+
+app.MapPut("/fruit/{id}", (string id, Fruit fruit) =>
+{
+
+    _fruit[id] = fruit;
+    return Results.NoContent();
+});
+
+app.MapDelete("/fruit/{id}", (string id) =>
+{
+    _fruit.TryRemove(id, out _);
+    return Results.NoContent();
+});
 
 app.Run();
-
-void DeleteFruit(string id)
-{
-    Fruit.All.Remove(id);
-}
-
-record Fruit(string Name, int Stock)
-{
-    public static readonly Dictionary<string, Fruit> All = new();
-};
-
-class Handlers
-{
-    public void ReplaceFruit(string id, Fruit fruit)
-    {
-        Fruit.All[id] = fruit;
-    }
-
-    public static void AddFruit(string id, Fruit fruit)
-    {
-        Fruit.All.Add(id, fruit);
-    }
-}
+record Fruit(string Name, int stock);
