@@ -1,15 +1,35 @@
+using System.Collections.Concurrent;
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
-builder.Services.AddProblemDetails();
-
 WebApplication app = builder.Build();
 
-if (!app.Environment.IsDevelopment())
-{
-    app.UseExceptionHandler();
-}
+var _fruit = new ConcurrentDictionary<string, Fruit>();
 
-app.UseStatusCodePages();
-
-app.MapGet("/", () => Results.NotFound());
+app.MapGet("/fruit/{id}", (string id) =>
+    _fruit.TryGetValue(id, out var fruit)
+        ? TypedResults.Ok(fruit)
+        : Results.Problem(statusCode: 404))
+    .AddEndpointFilter(ValidationHelper.ValidateId);
 
 app.Run();
+
+public record Fruit(string Name, int stock);
+
+class ValidationHelper
+{
+    internal static async ValueTask<object?> ValidateId(
+        EndpointFilterInvocationContext context,
+        EndpointFilterDelegate next)
+    {
+        var id = context.GetArgument<string>(0);
+        if (string.IsNullOrEmpty(id) || !id.StartsWith('f'))
+        {
+            return Results.ValidationProblem(
+                new Dictionary<string, string[]>
+                {
+                    {"id", new[]{"Invalid format. Id must start with 'f'"}}
+                });
+        }
+
+        return await next(context);
+    }
+ }
