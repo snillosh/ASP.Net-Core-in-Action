@@ -1,29 +1,50 @@
 using System.Collections.Concurrent;
+using System.Reflection;
+
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 WebApplication app = builder.Build();
 
 var _fruit = new ConcurrentDictionary<string, Fruit>();
 
-app.MapGet("/fruit/{id}", (string id) =>
+RouteGroupBuilder fruitApi = app.MapGroup("/fruit");
+
+fruitApi.MapGet("/", () => _fruit);
+
+RouteGroupBuilder fruitApiWithValidation = fruitApi.MapGroup("/")
+    .AddEndpointFilter<IdValidationFilter>();
+
+fruitApiWithValidation.MapGet("/{id}", (string id) =>
     _fruit.TryGetValue(id, out var fruit)
         ? TypedResults.Ok(fruit)
-        : Results.Problem(statusCode: 404))
-    .AddEndpointFilter(ValidationHelper.ValidateId)
-    .AddEndpointFilter(async (context, next) =>
-    {
-    app.Logger.LogInformation("Executing filter...");
-        object? result = await next(context);
-        app.Logger.LogInformation($"Handler result: {result}");
-        return result;
-    });
+        : Results.Problem(statusCode: 404));
+
+fruitApiWithValidation.MapPost("/{id}", (Fruit fruit, string id) =>
+    _fruit.TryAdd(id, fruit)
+        ? TypedResults.Created($"/fruit/{id}", fruit)
+        : Results.ValidationProblem(new Dictionary<string, string[]>
+          {
+              { "id", new[] { "A fruit with this id already exists" } }
+        }));
+
+fruitApiWithValidation.MapPut("/{id}", (string id, Fruit fruit) =>
+{
+    _fruit[id] = fruit;
+    return Results.NoContent();
+});
+
+fruitApiWithValidation.MapDelete("/fruit/{id}", (string id) =>
+{
+    _fruit.TryRemove(id, out _);
+    return Results.NoContent();
+});
 
 app.Run();
 
-public record Fruit(string Name, int stock);
+public record Fruit(string Name, int Stock);
 
-class ValidationHelper
+class IdValidationFilter : IEndpointFilter
 {
-    internal static async ValueTask<object?> ValidateId(
+    public async ValueTask<object?> InvokeAsync(
         EndpointFilterInvocationContext context,
         EndpointFilterDelegate next)
     {
@@ -39,4 +60,4 @@ class ValidationHelper
 
         return await next(context);
     }
- }
+}
