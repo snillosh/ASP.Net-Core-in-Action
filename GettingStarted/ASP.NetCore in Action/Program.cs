@@ -1,24 +1,39 @@
-using System.Xml.Linq;
-using System;
-
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 WebApplication app = builder.Build();
 
-var people = new List<Person>
-{
-    new("Tom", "Hanks"),
-    new("Denzel", "Washington"),
-    new("Leondardo", "DiCaprio"),
-    new("Al", "Pacino"),
-    new("Morgan", "Freeman"),
-    new("Tom", "Killer"),
-    new("Tim", "Copper"),
-};
+app.MapGet("/fruit", () => Fruit.All);
 
-app.MapGet("/person/{name}", (string name) =>
-    people.Where(p => p.FirstName.StartsWith(name)));
+var getFruit = (string id) => Fruit.All[id];
+app.MapGet("/fruit/{id}", getFruit);
+
+app.MapPost("/fruit/{id}", Handlers.AddFruit);
+
+Handlers handlers = new();
+app.MapPut("/fruit/{id}", handlers.ReplaceFruit);
+
+app.MapDelete("/fruit/{id}", DeleteFruit);
 
 app.Run();
 
+void DeleteFruit(string id)
+{
+    Fruit.All.Remove(id);
+}
 
-public record Person(string FirstName, string LastName);
+record Fruit(string Name, int Stock)
+{
+    public static readonly Dictionary<string, Fruit> All = new();
+};
+
+class Handlers
+{
+    public void ReplaceFruit(string id, Fruit fruit)
+    {
+        Fruit.All[id] = fruit;
+    }
+
+    public static void AddFruit(string id, Fruit fruit)
+    {
+        Fruit.All.Add(id, fruit);
+    }
+}
