@@ -1,18 +1,23 @@
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddHealthChecks();
-builder.Services.AddRazorPages();
+builder.Services.Configure<RouteOptions>(o =>
+{
+    o.LowercaseUrls = true;
+    o.AppendTrailingSlash = true;
+    o.LowercaseQueryStrings = false;
+});
 
 WebApplication app = builder.Build();
 
-app.MapGet("/product/{name}", (string name) => $"The product is {name}")
-    .WithName("product");
+app.MapGet("/HealthCheck", () => Results.Ok()).WithName("healthcheck");
+app.MapGet("/{name}", (string name) => name).WithName("product");
 
-app.MapGet("/links", (LinkGenerator links) =>
+app.MapGet("/", (LinkGenerator links) =>
+new[]
 {
-    string link = links.GetPathByName("product",
-        new { name = "big-widget" });
-    return $"View the product at {link}";
+    links.GetPathByName("healthcheck"),
+    links.GetPathByName("product",
+        new { Name = "Big-Widget", Q = "Test"})
 });
 
 app.Run();
